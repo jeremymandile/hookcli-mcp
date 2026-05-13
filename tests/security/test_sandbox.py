@@ -19,8 +19,9 @@ def test_validator_blocks_sudo():
 
 
 def test_validator_renders_template():
+    # secret is a callable — use function-call syntax, not attribute access
     validator = HookValidator(secrets={"API_KEY": "secret123"})
-    report = validator.validate("echo {{ secret.API_KEY }}", {})
+    report = validator.validate("echo {{ secret('API_KEY') }}", {})
     assert report.valid
     assert "secret123" in (report.rendered_command or "")
 
