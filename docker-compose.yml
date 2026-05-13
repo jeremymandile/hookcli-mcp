@@ -4,16 +4,45 @@ services:
     ports:
       - "8000:8000"
     env_file: .env
-    user: root  # dev only — production: use docker-socket-proxy (see SECURITY.md)
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      # Reach Docker through the restricted proxy, not the raw socket
+      - DOCKER_HOST=tcp://docker-socket-proxy:2375
     depends_on:
       redis:
         condition: service_healthy
       otel-collector:
         condition: service_started
+      docker-socket-proxy:
+        condition: service_healthy
     networks:
       - hookcli-net
+
+  docker-socket-proxy:
+    image: ghcr.io/tecnativa/docker-socket-proxy:latest
+    environment:
+      # Permit only the endpoints Hook CLI MCP needs for sandbox execution
+      CONTAINERS: 1   # list, inspect, create, start, stop, wait, remove
+      IMAGES: 1       # list, inspect, pull (alpine:3.19)
+      NETWORKS: 0
+      VOLUMES: 0
+      AUTH: 0
+      SECRETS: 0
+      POST: 1         # allow all POST (create/start/wait)
+      DELETE: 1       # allow container removal
+      EXEC: 0         # never allow exec into containers
+      BUILD: 0        # never allow image builds via API
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    ports:
+      - "127.0.0.1:2375:2375"  # bind to localhost only — not exposed externally
+    networks:
+      - hookcli-net
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:2375/version"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
 
   redis:
     image: redis:7-alpine
