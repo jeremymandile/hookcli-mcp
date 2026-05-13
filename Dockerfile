@@ -1,13 +1,15 @@
 FROM python:3.12-slim AS builder
 WORKDIR /app
-COPY pyproject.toml .
+
+# Copy full source first so editable install resolves package metadata
+COPY . .
 RUN pip install --no-cache-dir --user -e .
 
 FROM python:3.12-slim
 WORKDIR /app
 RUN groupadd -r app && useradd -r -g app app
 COPY --from=builder /root/.local /home/app/.local
-COPY --chown=app:app . .
+COPY --from=builder /app /app
 ENV PATH="/home/app/.local/bin:$PATH"
 ENV PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 
