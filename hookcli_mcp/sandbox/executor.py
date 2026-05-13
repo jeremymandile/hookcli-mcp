@@ -4,6 +4,7 @@ from pathlib import Path
 from typing import Dict, Any
 
 SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
+MAX_OUTPUT_BYTES = 10_240  # 10 KB — prevent memory exhaustion from verbose commands
 
 
 async def run_in_sandbox(command: str, env: Dict[str, str], hook_id: str, timeout: int = 120) -> Dict[str, Any]:
@@ -14,34 +15,41 @@ async def run_in_sandbox(command: str, env: Dict[str, str], hook_id: str, timeou
         container = client.containers.run(
             "alpine:3.19",
             command=["sh", "-c", command],
-            environment=env,
+            environment={**env, "DRY_RUN": "false"},
+            network_disabled=True,          # zero egress — no outbound calls
             read_only=True,
-            tmpfs={"/tmp": "rw,noexec,nosuid,size=64m"},
+            tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
             security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
             cap_drop=["ALL"],
             cap_add=["CHOWN", "SETUID", "SETGID"],
-            network="hook-isolated",
             mem_limit="256m",
-            cpu_period=100000,
-            cpu_quota=50000,
+            nano_cpus=500_000_000,          # 0.5 vCPU
+            pids_limit=64,                  # fork-bomb prevention
             detach=True,
+            labels={"hookcli.hook_id": hook_id},
         )
 
         loop = asyncio.get_running_loop()
         exit_data = await loop.run_in_executor(None, lambda: container.wait(timeout=timeout))
         exit_code = exit_data.get("StatusCode", -1)
 
-        stdout = await loop.run_in_executor(None, lambda: container.logs(stdout=True, stderr=False))
-        stderr = await loop.run_in_executor(None, lambda: container.logs(stdout=False, stderr=True))
+        raw_logs = await loop.run_in_executor(None, lambda: container.logs(stdout=True, stderr=True))
+        # Truncate to prevent callers accumulating unbounded output
+        decoded = raw_logs.decode("utf-8", errors="replace") if isinstance(raw_logs, bytes) else raw_logs
+        output = decoded[:MAX_OUTPUT_BYTES]
+        truncated = len(decoded) > MAX_OUTPUT_BYTES
 
         return {
             "exit_code": exit_code,
-            "stdout": stdout.decode().strip() if isinstance(stdout, bytes) else "",
-            "stderr": stderr.decode().strip() if isinstance(stderr, bytes) else "",
+            "stdout": output,
+            "stderr": "",
             "success": exit_code == 0,
+            "truncated": truncated,
         }
+    except docker.errors.APIError as e:
+        return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False, "truncated": False}
     except Exception as e:
-        return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False}
+        return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False, "truncated": False}
     finally:
         if container:
             try:

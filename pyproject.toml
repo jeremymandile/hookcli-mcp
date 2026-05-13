@@ -29,6 +29,8 @@ dependencies = [
     "prometheus-client>=0.20.0,<1.0",
     "sentence-transformers>=2.7.0,<3.0",
     "chromadb>=0.5.0,<1.0",
+    "pydantic-settings>=2.0.0,<3.0",
+    "structlog>=24.0.0,<25.0",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +44,9 @@ dev = [
 ]
 
 [project.scripts]
-hookcli-mcp = "hookcli_mcp.server:main"
+hookcli-mcp = "hookcli_mcp.server:http_main"
+hookcli-mcp-http = "hookcli_mcp.server:http_main"
+hookcli-mcp-stdio = "hookcli_mcp.server:stdio_main"
 
 [tool.mcp]
 name = "hookcli-mcp"

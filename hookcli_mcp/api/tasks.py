@@ -10,6 +10,9 @@ from fastapi.responses import StreamingResponse
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 task_registry: dict = {}
 
+_HEARTBEAT_INTERVAL = 15  # seconds — keeps proxies and AI SSE clients alive
+_QUEUE_MAX = 1000          # bounded queue — prevents memory exhaustion on noisy containers
+
 
 @router.get("/{task_id}/stream")
 async def stream_task_logs(task_id: str, request: Request):
@@ -27,13 +30,25 @@ async def stream_task_logs(task_id: str, request: Request):
         raise HTTPException(status_code=404, detail="Container not found")
 
     async def event_generator() -> AsyncGenerator[str, None]:
-        queue: asyncio.Queue = asyncio.Queue()
+        # Bounded queue prevents unbounded memory growth from a chatty container.
+        queue: asyncio.Queue = asyncio.Queue(maxsize=_QUEUE_MAX)
+        stop_event = asyncio.Event()
         start_time = time.time()
 
         def docker_thread():
             try:
                 for chunk in container.attach(stdout=True, stderr=True, stream=True, logs=True):
-                    queue.put_nowait(chunk)
+                    if stop_event.is_set():
+                        break
+                    try:
+                        queue.put_nowait(chunk)
+                    except asyncio.QueueFull:
+                        # Drop oldest item to make room — prefer liveness over completeness
+                        try:
+                            queue.get_nowait()
+                        except asyncio.QueueEmpty:
+                            pass
+                        queue.put_nowait(chunk)
                 queue.put_nowait(b"__EOF__")
             except Exception as e:
                 queue.put_nowait(f"__ERROR__{str(e)}".encode())
@@ -41,9 +56,18 @@ async def stream_task_logs(task_id: str, request: Request):
         asyncio.create_task(asyncio.to_thread(docker_thread))
 
         buffer = b""
+        last_heartbeat = time.time()
+
         try:
             while not request.is_disconnected():
-                chunk = await queue.get()
+                # Use a short get timeout so heartbeats fire even when the container is silent.
+                try:
+                    chunk = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_INTERVAL)
+                except asyncio.TimeoutError:
+                    # No data within heartbeat window — send SSE comment to keep connection alive.
+                    yield ": heartbeat\n\n"
+                    last_heartbeat = time.time()
+                    continue
 
                 if chunk == b"__EOF__":
                     container.reload()
@@ -67,9 +91,11 @@ async def stream_task_logs(task_id: str, request: Request):
                     if payload:
                         event_name = "stdout" if stream_type == 1 else "stderr"
                         yield f"event: {event_name}\ndata: {payload}\n\n"
+
         except asyncio.CancelledError:
             pass
         finally:
+            stop_event.set()
             task["status"] = "completed"
             try:
                 container.remove(force=True)
