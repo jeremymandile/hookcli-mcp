@@ -26,7 +26,7 @@ def init_otel(app=None, service_name: str = "hookcli-mcp"):
     trace_provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=otlp_endpoint)))
     trace.set_tracer_provider(trace_provider)
 
-    prom_reader = PrometheusMetricReader(namespace="hookcli_mcp")
+    prom_reader = PrometheusMetricReader()
     meter_provider = MeterProvider(resource=resource, metric_readers=[prom_reader])
     metrics.set_meter_provider(meter_provider)
 
