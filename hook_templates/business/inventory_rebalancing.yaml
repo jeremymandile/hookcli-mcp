@@ -1,0 +1,19 @@
+name: inventory_rebalancing
+description: >
+  When stock drops below the reorder threshold, reserve inventory from the
+  main warehouse and notify logistics to physically move the items.
+source: webhook
+event_type: inventory.stock_low
+filter_expr: .stock_level < .reorder_point and .warehouse != "main"
+command: |
+  psql "$DATABASE_URL" -c \
+    "UPDATE inventory SET reserved = reserved + {{ event.qty_needed }} \
+     WHERE sku = '{{ event.sku }}' AND warehouse = 'main'" \
+  && curl -s -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#logistics\", \"text\": \"Auto-rebalanced {{ event.qty_needed }} units of {{ event.sku }} to {{ event.warehouse }}\"}"
+timeout_sec: 30
+approval_required: false
+required_binaries: [psql, curl]
+required_secrets: [SLACK_BOT_TOKEN, DATABASE_URL]

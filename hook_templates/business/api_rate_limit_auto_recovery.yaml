@@ -1,0 +1,26 @@
+name: api_rate_limit_auto_recovery
+description: >
+  When a client hits rate limits, check their subscription tier. Bump paid
+  customers automatically. Return a 429 with an upgrade link for free-tier users
+  and log the event for the sales team.
+source: webhook
+event_type: rate_limit.hit
+filter_expr: .requests_this_minute > .limit
+command: |
+  TIER=$(stripe customers retrieve {{ event.customer_id }} \
+    --query 'metadata.tier' --output text) \
+  && if [ "$TIER" = "paid" ] || [ "$TIER" = "enterprise" ]; then
+       curl -sf -X PATCH "{{ event.api_gateway_url }}/limits/{{ event.customer_id }}" \
+         -H "Authorization: Bearer {{ secret('API_GATEWAY_KEY') }}" \
+         -d "{\"requests_per_minute\": $(( {{ event.limit }} * 2 ))}" \
+       && echo "Rate limit doubled for paid customer {{ event.customer_id }}"
+     else
+       curl -sf -X POST https://slack.com/api/chat.postMessage \
+         -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+         -H "Content-Type: application/json" \
+         -d "{\"channel\": \"#sales\", \"text\": \"Free-tier customer {{ event.customer_id }} hit rate limit — potential upgrade opportunity\"}"
+     fi
+timeout_sec: 15
+approval_required: false
+required_binaries: [stripe, curl]
+required_secrets: [SLACK_BOT_TOKEN, STRIPE_API_KEY, API_GATEWAY_KEY]

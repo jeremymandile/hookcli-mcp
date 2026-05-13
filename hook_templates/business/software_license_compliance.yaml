@@ -1,0 +1,29 @@
+name: software_license_compliance
+description: >
+  When license usage exceeds threshold, determine if it's real over-provisioning
+  or genuine need. Free unused seats or open a procurement Jira accordingly.
+source: webhook
+event_type: license.threshold
+filter_expr: .usage_percent > 90
+command: |
+  UNUSED=$(curl -sf "{{ event.license_api_url }}/seats" \
+    -H "Authorization: Bearer {{ secret('LICENSE_API_KEY') }}" \
+    | jq '[.seats[] | select(.last_active < (now - 2592000))] | length') \
+  && if [ "$UNUSED" -gt 0 ]; then
+       curl -sf -X DELETE "{{ event.license_api_url }}/seats/inactive" \
+         -H "Authorization: Bearer {{ secret('LICENSE_API_KEY') }}" \
+       && curl -sf -X POST https://slack.com/api/chat.postMessage \
+          -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+          -H "Content-Type: application/json" \
+          -d "{\"channel\": \"#it-ops\", \"text\": \"Freed $UNUSED unused {{ event.product }} licenses. New usage: calculated automatically.\"}"
+     else
+       jira issue create \
+         --project PROCUREMENT \
+         --issuetype Task \
+         --summary "License expansion needed: {{ event.product }} at {{ event.usage_percent }}%" \
+         --description "Current: {{ event.current_seats }} seats\nUsage: {{ event.usage_percent }}%\nAll seats are actively used."
+     fi
+timeout_sec: 30
+approval_required: false
+required_binaries: [curl, jq, jira]
+required_secrets: [SLACK_BOT_TOKEN, LICENSE_API_KEY]

@@ -1,0 +1,36 @@
+name: dynamic_cloud_scaling
+description: >
+  Scale up the Auto Scaling Group during business hours when CPU exceeds
+  threshold. Outside business hours, check for DDoS vs. organic load and
+  page on-call if anomalous.
+source: webhook
+event_type: cpu.threshold.exceeded
+filter_expr: .cpu_percent > 80
+command: |
+  HOUR=$(date +%H) \
+  && if [ "$HOUR" -ge 8 ] && [ "$HOUR" -le 18 ]; then
+       aws autoscaling set-desired-capacity \
+         --auto-scaling-group-name {{ event.asg_name }} \
+         --desired-capacity $(( {{ event.current_capacity }} + 2 ))
+     else
+       REQUEST_RATE=$(aws cloudwatch get-metric-statistics \
+         --namespace AWS/ApplicationELB \
+         --metric-name RequestCount \
+         --period 300 \
+         --statistics Sum \
+         --query 'Datapoints[0].Sum' \
+         --output text) \
+       && if [ "$REQUEST_RATE" -gt 100000 ]; then
+            curl -sf -X POST "{{ secret('PAGERDUTY_API_URL') }}/incidents" \
+              -H "Authorization: Token token={{ secret('PAGERDUTY_API_KEY') }}" \
+              -d "{\"incident\": {\"title\": \"Possible DDoS: CPU {{ event.cpu_percent }}% on {{ event.asg_name }}\"}}"
+          else
+            aws autoscaling set-desired-capacity \
+              --auto-scaling-group-name {{ event.asg_name }} \
+              --desired-capacity $(( {{ event.current_capacity }} + 1 ))
+          fi
+     fi
+timeout_sec: 45
+approval_required: false
+required_binaries: [aws, curl, date]
+required_secrets: [PAGERDUTY_API_URL, PAGERDUTY_API_KEY]

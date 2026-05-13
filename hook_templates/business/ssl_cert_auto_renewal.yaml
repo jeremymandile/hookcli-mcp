@@ -1,0 +1,29 @@
+name: ssl_cert_auto_renewal
+description: >
+  Renew expiring SSL certificates via certbot, validate the new cert,
+  reload nginx, and post confirmation. Open a Jira ticket if renewal fails.
+source: webhook
+event_type: cert.expiring
+filter_expr: .days_remaining < 30
+command: |
+  certbot renew --cert-name {{ event.domain }} --non-interactive 2>&1 \
+  && nginx -t \
+  && nginx -s reload \
+  && echo "Certificate renewed and nginx reloaded for {{ event.domain }}" \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#infra\", \"text\": \"SSL cert renewed for {{ event.domain }} ({{ event.days_remaining }} days remaining at renewal)\"}" \
+  || (
+    jira issue create \
+      --project INFRA \
+      --issuetype Bug \
+      --summary "SSL cert renewal FAILED for {{ event.domain }}" \
+      --description "Days remaining: {{ event.days_remaining }}\nManual renewal required immediately." \
+      --priority Critical \
+    && exit 1
+  )
+timeout_sec: 120
+approval_required: false
+required_binaries: [certbot, nginx, curl, jira]
+required_secrets: [SLACK_BOT_TOKEN]

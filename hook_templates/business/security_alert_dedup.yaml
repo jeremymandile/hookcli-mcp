@@ -1,0 +1,25 @@
+name: security_alert_dedup
+description: >
+  Deduplicate security alerts by checking for active incidents. Enrich novel
+  alerts with CMDB data and page on-call. Suppress duplicates.
+source: webhook
+event_type: alert.critical
+filter_expr: .severity == "critical"
+command: |
+  EXISTING=$(curl -sf "{{ secret('PAGERDUTY_API_URL') }}/incidents?status=triggered&service_ids[]={{ event.service_id }}" \
+    -H "Authorization: Token token={{ secret('PAGERDUTY_API_KEY') }}" | jq '.total') \
+  && if [ "$EXISTING" -eq 0 ]; then
+       OWNER=$(aws resourcegroupstaggingapi get-resources \
+         --resource-arn-list {{ event.resource_arn }} \
+         --query 'ResourceTagMappingList[0].Tags[?Key==`Owner`].Value' \
+         --output text) \
+       && curl -sf -X POST "{{ secret('PAGERDUTY_API_URL') }}/incidents" \
+          -H "Authorization: Token token={{ secret('PAGERDUTY_API_KEY') }}" \
+          -d "{\"incident\": {\"title\": \"{{ event.title }}\", \"service\": {\"id\": \"{{ event.service_id }}\"}}, \"details\": \"Owner: $OWNER\"}"
+     else
+       echo "Duplicate suppressed: active incident exists for {{ event.service_id }}"
+     fi
+timeout_sec: 30
+approval_required: false
+required_binaries: [curl, aws, jq]
+required_secrets: [PAGERDUTY_API_URL, PAGERDUTY_API_KEY]

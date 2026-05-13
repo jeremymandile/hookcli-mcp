@@ -1,0 +1,21 @@
+name: invoice_approval_escalation
+description: >
+  DM the on-call finance manager when a large invoice needs approval.
+  If no response within 30 minutes, escalate to the finance director.
+source: webhook
+event_type: invoice.approval_required
+filter_expr: .amount > 5000
+command: |
+  MANAGER=$(psql "$DATABASE_URL" -t -c \
+    "SELECT slack_id FROM on_call WHERE team='finance' LIMIT 1") \
+  && curl -s -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"$MANAGER\", \"text\": \"Invoice {{ event.invoice_id }} for \${{ event.amount }} needs approval. Reply APPROVE {{ event.invoice_id }}\"}"
+timeout_sec: 30
+approval_required: false
+required_binaries: [psql, curl]
+required_secrets: [SLACK_BOT_TOKEN, DATABASE_URL]
+notes: >
+  Pair with a cron hook that runs after 30 minutes to escalate unapproved
+  invoices to the finance director.

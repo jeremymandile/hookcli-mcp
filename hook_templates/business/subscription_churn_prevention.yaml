@@ -1,0 +1,24 @@
+name: subscription_churn_prevention
+description: >
+  When a high-value customer cancels, generate a personalized retention coupon
+  via the Stripe Coupon API and email the customer before they fully churn.
+source: webhook
+event_type: customer.subscription.updated
+filter_expr: .status == "canceled" and .metadata.lifetime_value > 1000
+command: |
+  COUPON=$(stripe coupons create \
+    --percent-off 20 \
+    --duration once \
+    --metadata customer="{{ event.customer }}" \
+    --query 'id' \
+    --output text) \
+  && stripe customers update {{ event.customer }} \
+     --coupon "$COUPON" \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#revenue\", \"text\": \"Retention offer sent to high-value customer {{ event.customer }} (LTV: \${{ event.metadata.lifetime_value }})\"}"
+timeout_sec: 30
+approval_required: false
+required_binaries: [stripe, curl]
+required_secrets: [SLACK_BOT_TOKEN, STRIPE_API_KEY]

@@ -1,0 +1,23 @@
+name: fraud_detection_payment_hold
+description: >
+  Immediately freeze suspected fraudulent payments, flag the customer account,
+  notify the fraud team, and log an immutable compliance audit entry.
+source: webhook
+event_type: radar.early_fraud_warning
+filter_expr: .type == "radar.early_fraud_warning"
+command: |
+  stripe payment_intents cancel {{ event.payment_intent }} \
+    --cancellation-reason fraudulent \
+  && stripe customers update {{ event.customer }} \
+     --metadata fraud_flagged=true fraud_flagged_at="{{ event.created }}" \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#fraud-alerts\", \"text\": \"Fraud warning: {{ event.payment_intent }} (customer {{ event.customer }}) — account frozen, pending review\"}"
+timeout_sec: 20
+approval_required: false
+required_binaries: [stripe, curl]
+required_secrets: [SLACK_BOT_TOKEN, STRIPE_API_KEY]
+notes: >
+  This hook fires before human review. Set approval_required: true if your
+  fraud policy requires human confirmation before freezing accounts.

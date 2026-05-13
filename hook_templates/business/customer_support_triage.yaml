@@ -1,0 +1,19 @@
+name: customer_support_triage
+description: >
+  Route critical support tickets to the VIP queue and post in the war-room
+  Slack channel within seconds of creation.
+source: webhook
+event_type: ticket.created
+filter_expr: |
+  (.subject | test("outage|urgent|refund|critical"; "i")) or .priority == "high"
+command: |
+  jira issue update {{ event.ticket_id }} --field priority=Critical \
+    --field labels=vip-queue \
+  && curl -s -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#war-room\", \"text\": \"Critical ticket auto-escalated: {{ event.ticket_id }} — {{ event.subject }}\"}"
+timeout_sec: 20
+approval_required: false
+required_binaries: [jira, curl]
+required_secrets: [SLACK_BOT_TOKEN]

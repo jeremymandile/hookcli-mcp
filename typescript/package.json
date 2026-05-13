@@ -1,0 +1,19 @@
+{
+  "name": "hookcli-mcp-ts",
+  "version": "0.1.0",
+  "description": "Lightweight TypeScript MCP companion for Hook CLI MCP — no Docker required",
+  "type": "module",
+  "main": "dist/server.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsc --watch"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "typescript": "^5.5.0"
+  }
+}

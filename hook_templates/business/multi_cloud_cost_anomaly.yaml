@@ -1,0 +1,25 @@
+name: multi_cloud_cost_anomaly
+description: >
+  When daily spend exceeds budget threshold across AWS and GCP, aggregate
+  the top 10 cost drivers from both clouds and post to the FinOps channel.
+source: webhook
+event_type: budget.threshold.exceeded
+filter_expr: .percentage_used > 80
+command: |
+  AWS_TOP=$(aws ce get-cost-and-usage \
+    --time-period Start=$(date -d "yesterday" +%Y-%m-%d),End=$(date +%Y-%m-%d) \
+    --granularity DAILY \
+    --metrics BlendedCost \
+    --group-by Type=DIMENSION,Key=SERVICE \
+    --query 'ResultsByTime[0].Groups | sort_by(@, &Metrics.BlendedCost.Amount) | reverse(@) | [:5]' \
+    --output json) \
+  && GCP_TOP=$(gcloud billing accounts describe {{ secret('GCP_BILLING_ACCOUNT') }} \
+    --format json | jq '.[-5:]') \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#finops\", \"text\": \"Cost alert: {{ event.percentage_used }}% of budget used.\nTop AWS services:\n$AWS_TOP\"}"
+timeout_sec: 60
+approval_required: false
+required_binaries: [aws, gcloud, jq, curl, date]
+required_secrets: [SLACK_BOT_TOKEN, GCP_BILLING_ACCOUNT]

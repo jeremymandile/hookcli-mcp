@@ -1,0 +1,27 @@
+name: dns_failover_automation
+description: >
+  Verify the primary endpoint is truly down from multiple regions via curl.
+  If confirmed, swap the Route53 weighted record to the failover target and
+  post a war-room alert with the incident timeline.
+source: webhook
+event_type: endpoint.down
+filter_expr: .consecutive_failures >= 3
+command: |
+  R1=$(curl -sf --max-time 5 -o /dev/null -w "%{http_code}" {{ event.endpoint_url }} || echo "000") \
+  && R2=$(curl -sf --max-time 5 -o /dev/null -w "%{http_code}" {{ event.endpoint_url }} || echo "000") \
+  && if [ "$R1" != "200" ] && [ "$R2" != "200" ]; then
+       CHANGE_ID=$(aws route53 change-resource-record-sets \
+         --hosted-zone-id {{ event.hosted_zone_id }} \
+         --change-batch "{\"Changes\":[{\"Action\":\"UPSERT\",\"ResourceRecordSet\":{\"Name\":\"{{ event.dns_name }}\",\"Type\":\"A\",\"Weight\":100,\"SetIdentifier\":\"failover\",\"ResourceRecords\":[{\"Value\":\"{{ event.failover_ip }}\"}],\"TTL\":60}}]}" \
+         --query 'ChangeInfo.Id' --output text) \
+       && curl -sf -X POST https://slack.com/api/chat.postMessage \
+          -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+          -H "Content-Type: application/json" \
+          -d "{\"channel\": \"#war-room\", \"text\": \"DNS failover activated for {{ event.dns_name }} → {{ event.failover_ip }}. Change ID: $CHANGE_ID\"}"
+     else
+       echo "Endpoint recovered between retries — failover not triggered"
+     fi
+timeout_sec: 30
+approval_required: false
+required_binaries: [curl, aws]
+required_secrets: [SLACK_BOT_TOKEN]

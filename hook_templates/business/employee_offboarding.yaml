@@ -1,0 +1,30 @@
+name: employee_offboarding
+description: >
+  Immediately suspend employee accounts across GitHub, Slack, AWS IAM, and Jira
+  in parallel on termination. Post a timestamped confirmation to the audit channel.
+source: webhook
+event_type: employee.terminated
+filter_expr: .termination_type in ["voluntary", "involuntary"]
+command: |
+  TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ") \
+  && gh api orgs/{{ secret('GITHUB_ORG') }}/members/{{ event.github_username }} \
+     -X DELETE \
+  && aws iam delete-login-profile --user-name {{ event.aws_username }} \
+  && aws iam attach-user-policy \
+     --user-name {{ event.aws_username }} \
+     --policy-arn arn:aws:iam::aws:policy/AWSDenyAll \
+  && jira user deactivate --username {{ event.jira_username }} \
+  && curl -sf -X POST https://slack.com/api/users.admin.setInactive \
+     -H "Authorization: Bearer {{ secret('SLACK_ADMIN_TOKEN') }}" \
+     -d "user={{ event.slack_user_id }}" \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"#security-audit\", \"text\": \"Offboarding complete for {{ event.full_name }} at $TIMESTAMP — GitHub, AWS IAM, Jira, Slack accounts suspended\"}"
+timeout_sec: 60
+approval_required: true
+required_binaries: [gh, aws, jira, curl, date]
+required_secrets: [GITHUB_ORG, SLACK_ADMIN_TOKEN, SLACK_BOT_TOKEN]
+notes: >
+  approval_required: true — always require human confirmation before
+  account revocation. The HITL gate gives the HR team a final review step.

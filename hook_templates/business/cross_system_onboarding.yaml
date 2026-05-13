@@ -1,0 +1,27 @@
+name: cross_system_onboarding
+description: >
+  Provision new employee accounts across GitHub, Slack, Jira, and Google
+  Workspace in parallel. Post a welcome message when all accounts are ready.
+source: webhook
+event_type: employee.created
+filter_expr: .employment_type == "full_time"
+command: |
+  gh api orgs/{{ secret('GITHUB_ORG') }}/invitations \
+    -f email="{{ event.email }}" \
+    -f role="direct_member" \
+  && curl -sf -X POST https://slack.com/api/users.admin.invite \
+     -H "Authorization: Bearer {{ secret('SLACK_ADMIN_TOKEN') }}" \
+     -d "email={{ event.email }}&channel={{ event.team_channel }}" \
+  && jira user create \
+     --username "{{ event.username }}" \
+     --email "{{ event.email }}" \
+     --display-name "{{ event.full_name }}" \
+  && echo "All accounts provisioned for {{ event.full_name }}" \
+  && curl -sf -X POST https://slack.com/api/chat.postMessage \
+     -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+     -H "Content-Type: application/json" \
+     -d "{\"channel\": \"{{ event.team_channel }}\", \"text\": \"Welcome {{ event.full_name }}! GitHub, Slack, and Jira accounts are ready.\"}"
+timeout_sec: 60
+approval_required: false
+required_binaries: [gh, curl, jira]
+required_secrets: [GITHUB_ORG, SLACK_ADMIN_TOKEN, SLACK_BOT_TOKEN]

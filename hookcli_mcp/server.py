@@ -2,7 +2,7 @@ import uvicorn
 from fastapi import FastAPI
 from mcp.server.fastmcp import FastMCP
 
-from hookcli_mcp.api import approvals, health, metrics, tasks
+from hookcli_mcp.api import approvals, health, metrics, stripe_webhooks, tasks
 from hookcli_mcp.observability.otel import init_otel
 from hookcli_mcp.tools.bottleneck_analyze import BottleneckRequest
 from hookcli_mcp.tools.bottleneck_analyze import bottleneck_analyze as _bottleneck_analyze
@@ -54,6 +54,7 @@ app.include_router(tasks.router, prefix="/api")
 app.include_router(approvals.router, prefix="/api")
 app.include_router(health.router, prefix="/api")
 app.include_router(metrics.router, prefix="/api")
+app.include_router(stripe_webhooks.router, prefix="/api")
 
 # Mount MCP HTTP transport at /mcp for proxy/browser access.
 # Primary AI client transport is still stdio.

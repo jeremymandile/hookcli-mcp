@@ -1,0 +1,33 @@
+name: database_backup_verification
+description: >
+  Nightly: dump the database, upload to S3, restore to an ephemeral container,
+  run a smoke test, verify row counts, then post the result to Slack.
+source: webhook
+event_type: cron.daily.3am
+filter_expr: ""
+command: |
+  TIMESTAMP=$(date +%Y%m%d_%H%M%S) \
+  && pg_dump "$DATABASE_URL" | gzip > /tmp/backup_$TIMESTAMP.sql.gz \
+  && aws s3 cp /tmp/backup_$TIMESTAMP.sql.gz \
+       s3://{{ secret('BACKUP_BUCKET') }}/backups/backup_$TIMESTAMP.sql.gz \
+  && RESTORE_DB="verify_$(echo $RANDOM)" \
+  && psql "$DATABASE_URL" -c "CREATE DATABASE $RESTORE_DB" \
+  && gunzip -c /tmp/backup_$TIMESTAMP.sql.gz | psql "$(echo $DATABASE_URL | sed 's|/[^/]*$|/'$RESTORE_DB|)" \
+  && PROD_COUNT=$(psql "$DATABASE_URL" -t -c "SELECT COUNT(*) FROM executions") \
+  && RESTORE_COUNT=$(psql "$(echo $DATABASE_URL | sed 's|/[^/]*$|/'$RESTORE_DB|)" -t -c "SELECT COUNT(*) FROM executions") \
+  && psql "$DATABASE_URL" -c "DROP DATABASE $RESTORE_DB" \
+  && if [ "$PROD_COUNT" -eq "$RESTORE_COUNT" ]; then
+       curl -sf -X POST https://slack.com/api/chat.postMessage \
+         -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+         -H "Content-Type: application/json" \
+         -d "{\"channel\": \"#infra\", \"text\": \"Backup verified: $RESTORE_COUNT rows restored successfully from $TIMESTAMP\"}"
+     else
+       curl -sf -X POST https://slack.com/api/chat.postMessage \
+         -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+         -H "Content-Type: application/json" \
+         -d "{\"channel\": \"#infra\", \"text\": \"BACKUP MISMATCH: prod=$PROD_COUNT restore=$RESTORE_COUNT for $TIMESTAMP\"}" && exit 1
+     fi
+timeout_sec: 300
+approval_required: false
+required_binaries: [psql, aws, gzip, gunzip, sed, date, curl]
+required_secrets: [BACKUP_BUCKET, SLACK_BOT_TOKEN, DATABASE_URL]

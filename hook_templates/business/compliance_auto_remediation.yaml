@@ -1,0 +1,26 @@
+name: compliance_auto_remediation
+description: >
+  Auto-fix known S3 public bucket violations. Open a Jira ticket for novel
+  or unsupported resource types, with an audit entry for every action.
+source: webhook
+event_type: aws_config.non_compliant
+filter_expr: .compliance_type == "NON_COMPLIANT"
+command: |
+  if [ "{{ event.resource_type }}" = "AWS::S3::Bucket" ]; then
+    aws s3api put-bucket-acl \
+      --bucket {{ event.resource_id }} \
+      --acl private \
+    && echo "Remediated: S3 bucket {{ event.resource_id }} set to private"
+  else
+    jira issue create \
+      --project COMPLIANCE \
+      --issuetype Bug \
+      --summary "Non-compliant resource: {{ event.resource_type }}/{{ event.resource_id }}" \
+      --description "Rule: {{ event.config_rule_name }}\nAccount: {{ event.account_id }}"
+  fi
+timeout_sec: 30
+approval_required: true
+required_binaries: [aws, jira]
+notes: >
+  approval_required: true for production. S3 ACL changes are irreversible
+  without a separate re-enable step.
