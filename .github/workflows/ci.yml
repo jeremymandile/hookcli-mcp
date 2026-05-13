@@ -51,6 +51,7 @@ jobs:
       - run: pip install --pre -e ".[dev]"
       - name: Run tests
         # Ignore tests/security — those need real Docker sandbox access (DinD is unreliable in standard runners)
+        # tests/test_mcp_transport.py spawns a real stdio subprocess per test and is included
         run: pytest tests/ --asyncio-mode=auto -v --cov=hookcli_mcp --cov-report=xml --ignore=tests/security
         env:
           REDIS_URL: redis://localhost:6379/0
