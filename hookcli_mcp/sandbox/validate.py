@@ -5,8 +5,22 @@ from typing import Any
 
 import docker
 
-SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
+_SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
 MAX_OUTPUT_BYTES = 10_240  # 10 KB
+
+
+def _seccomp_opt() -> list[str]:
+    """Return security_opt list.
+
+    On Linux the daemon reads the file path directly.
+    On Windows Docker Desktop (WSL2 backend) absolute Windows paths can't be resolved
+    by the daemon; fall back to no-new-privileges only rather than crashing.
+    """
+    import platform
+    opts = ["no-new-privileges:true"]
+    if platform.system() != "Windows" and _SECCOMP_PATH.exists():
+        opts.append(f"seccomp={_SECCOMP_PATH}")
+    return opts
 
 
 async def run_validation_sandbox(command: str, timeout: int = 30) -> dict[str, Any]:
@@ -38,7 +52,7 @@ async def run_validation_sandbox(command: str, timeout: int = 30) -> dict[str, A
             network_disabled=True,
             read_only=True,
             tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},  # nosec B108
-            security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
+            security_opt=_seccomp_opt(),
             cap_drop=["ALL"],
             mem_limit="128m",
             nano_cpus=250_000_000,  # 0.25 vCPU

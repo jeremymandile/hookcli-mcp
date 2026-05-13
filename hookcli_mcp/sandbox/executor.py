@@ -5,8 +5,17 @@ from typing import Any
 
 import docker
 
-SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
+_SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
 MAX_OUTPUT_BYTES = 10_240  # 10 KB — prevent memory exhaustion from verbose commands
+
+
+def _seccomp_opt() -> list[str]:
+    """Return security_opt list; skip custom seccomp on Windows (WSL2 daemon can't resolve Windows paths)."""
+    import platform
+    opts = ["no-new-privileges:true"]
+    if platform.system() != "Windows" and _SECCOMP_PATH.exists():
+        opts.append(f"seccomp={_SECCOMP_PATH}")
+    return opts
 
 
 async def run_in_sandbox(command: str, env: dict[str, str], hook_id: str, timeout: int = 120) -> dict[str, Any]:
@@ -21,7 +30,7 @@ async def run_in_sandbox(command: str, env: dict[str, str], hook_id: str, timeou
             network_disabled=True,  # zero egress — no outbound calls
             read_only=True,
             tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},  # nosec B108
-            security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
+            security_opt=_seccomp_opt(),
             cap_drop=["ALL"],
             cap_add=["CHOWN", "SETUID", "SETGID"],
             mem_limit="256m",
