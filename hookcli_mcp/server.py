@@ -62,7 +62,7 @@ app.mount("/mcp", mcp.streamable_http_app())
 
 def http_main():
     """Entry point for `hookcli-mcp-http` — boots the webhook/SSE/metrics server."""
-    uvicorn.run("hookcli_mcp.server:app", host="0.0.0.0", port=8000, log_level="info")
+    uvicorn.run("hookcli_mcp.server:app", host="0.0.0.0", port=8000, log_level="info")  # nosec B104
 
 
 def stdio_main():

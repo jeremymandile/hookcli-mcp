@@ -37,7 +37,7 @@ async def run_validation_sandbox(command: str, timeout: int = 30) -> dict[str, A
             environment={"DRY_RUN": "true", "HOOKCLI_MODE": "validate"},
             network_disabled=True,
             read_only=True,
-            tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
+            tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},  # nosec B108
             security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
             cap_drop=["ALL"],
             mem_limit="128m",

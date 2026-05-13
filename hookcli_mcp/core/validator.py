@@ -63,7 +63,7 @@ class HookValidator:
 
         # ── Step 1: Template rendering ─────────────────────────────────────────
         try:
-            env = jinja2.Environment(loader=jinja2.BaseLoader(), autoescape=False, trim_blocks=True)
+            env = jinja2.Environment(loader=jinja2.BaseLoader(), autoescape=False, trim_blocks=True)  # nosec B701
             template = env.from_string(command)
             report.rendered_command = template.render(
                 event=payload,

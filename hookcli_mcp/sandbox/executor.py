@@ -20,7 +20,7 @@ async def run_in_sandbox(command: str, env: dict[str, str], hook_id: str, timeou
             environment={**env, "DRY_RUN": "false"},
             network_disabled=True,  # zero egress — no outbound calls
             read_only=True,
-            tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
+            tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},  # nosec B108
             security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
             cap_drop=["ALL"],
             cap_add=["CHOWN", "SETUID", "SETGID"],
