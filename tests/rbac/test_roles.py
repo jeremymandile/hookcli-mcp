@@ -48,11 +48,13 @@ class TestRBAC:
             await wrapped(context=ctx)
         assert exc_info.value.status_code == 403
 
-    def test_allowed_roles_hierarchy(self):
-        assert "admin" in _allowed_roles("viewer")
-        assert "operator" in _allowed_roles("viewer")
-        assert "viewer" in _allowed_roles("viewer")
-        assert "admin" in _allowed_roles("operator")
-        assert "viewer" not in _allowed_roles("operator")
-        assert "admin" in _allowed_roles("admin")
-        assert "operator" not in _allowed_roles("admin")
+
+# Extracted from the async class — pure value check, no event loop needed
+def test_allowed_roles_hierarchy():
+    assert "admin" in _allowed_roles("viewer")
+    assert "operator" in _allowed_roles("viewer")
+    assert "viewer" in _allowed_roles("viewer")
+    assert "admin" in _allowed_roles("operator")
+    assert "viewer" not in _allowed_roles("operator")
+    assert "admin" in _allowed_roles("admin")
+    assert "operator" not in _allowed_roles("admin")
