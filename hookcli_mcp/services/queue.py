@@ -10,14 +10,14 @@ Never write authoritative hook config or audit records to Redis.
 
 import json
 import os
-from typing import Any, Dict, Optional
+from typing import Any
 
 import redis.asyncio as aioredis
 
 _REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 
 # Module-level connection pool — created lazily on first use.
-_pool: Optional[aioredis.Redis] = None
+_pool: aioredis.Redis | None = None
 
 
 def _get_redis() -> aioredis.Redis:
@@ -27,14 +27,14 @@ def _get_redis() -> aioredis.Redis:
     return _pool
 
 
-async def push_retry(hook_id: str, event_id: str, payload: Dict[str, Any], attempt: int = 1) -> None:
+async def push_retry(hook_id: str, event_id: str, payload: dict[str, Any], attempt: int = 1) -> None:
     """Queue a failed event for retry. Worker pops from the left (FIFO)."""
     conn = _get_redis()
     message = json.dumps({"hook_id": hook_id, "event_id": event_id, "payload": payload, "attempt": attempt})
     await conn.rpush("hookcli:retry_queue", message)
 
 
-async def pop_retry(timeout: int = 5) -> Optional[Dict[str, Any]]:
+async def pop_retry(timeout: int = 5) -> dict[str, Any] | None:
     """Block-pop the next retry message. Returns None on timeout."""
     conn = _get_redis()
     result = await conn.blpop("hookcli:retry_queue", timeout=timeout)
@@ -44,7 +44,7 @@ async def pop_retry(timeout: int = 5) -> Optional[Dict[str, Any]]:
     return None
 
 
-async def push_dlq(hook_id: str, event_id: str, payload: Dict[str, Any], error: str) -> None:
+async def push_dlq(hook_id: str, event_id: str, payload: dict[str, Any], error: str) -> None:
     """Move a permanently failed event to the dead-letter queue."""
     conn = _get_redis()
     message = json.dumps({"hook_id": hook_id, "event_id": event_id, "payload": payload, "error": error})
@@ -57,7 +57,7 @@ async def cache_set(key: str, value: Any, ttl_seconds: int = 900) -> None:
     await conn.setex(f"hookcli:cache:{key}", ttl_seconds, json.dumps(value))
 
 
-async def cache_get(key: str) -> Optional[Any]:
+async def cache_get(key: str) -> Any | None:
     """Retrieve a cached value. Returns None on miss or expiry."""
     conn = _get_redis()
     raw = await conn.get(f"hookcli:cache:{key}")

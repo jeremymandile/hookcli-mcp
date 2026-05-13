@@ -1,6 +1,7 @@
 import pytest
 from fastapi import HTTPException
-from hookcli_mcp.auth.rbac import require_role, _allowed_roles
+
+from hookcli_mcp.auth.rbac import _allowed_roles, require_role
 
 
 @pytest.mark.asyncio

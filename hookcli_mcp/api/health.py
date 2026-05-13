@@ -12,8 +12,9 @@ class HealthResponse(BaseModel):
 
 @router.get("/health", response_model=HealthResponse, status_code=status.HTTP_200_OK)
 async def health_check():
-    import docker
     import aiosqlite
+    import docker
+
     try:
         docker.from_env().ping()
         docker_ok = True
@@ -26,7 +27,5 @@ async def health_check():
     except Exception:
         sqlite_ok = False
     return HealthResponse(
-        status="healthy" if (docker_ok and sqlite_ok) else "degraded",
-        docker_daemon=docker_ok,
-        sqlite_conn=sqlite_ok
+        status="healthy" if (docker_ok and sqlite_ok) else "degraded", docker_daemon=docker_ok, sqlite_conn=sqlite_ok
     )

@@ -1,5 +1,6 @@
+from typing import Any
+
 from pydantic import BaseModel, Field
-from typing import List, Dict, Any
 
 
 class BottleneckRequest(BaseModel):
@@ -12,8 +13,8 @@ class BottleneckResponse(BaseModel):
     analysis: str
     root_cause: str
     confidence: float
-    suggested_hooks: List[Dict[str, Any]]
-    next_steps: List[str]
+    suggested_hooks: list[dict[str, Any]]
+    next_steps: list[str]
 
 
 async def bottleneck_analyze(req: BottleneckRequest) -> BottleneckResponse:

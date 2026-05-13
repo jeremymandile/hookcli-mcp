@@ -1,4 +1,4 @@
-from hookcli_mcp.core.validator import HookValidator, ALLOWED_BINARIES
+from hookcli_mcp.core.validator import ALLOWED_BINARIES, HookValidator
 
 
 def test_blocks_rm_rf():

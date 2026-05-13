@@ -1,7 +1,8 @@
 import asyncio
+import contextlib
 import json
 import time
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import docker
 from fastapi import APIRouter, HTTPException, Request
@@ -11,7 +12,7 @@ router = APIRouter(prefix="/tasks", tags=["tasks"])
 task_registry: dict = {}
 
 _HEARTBEAT_INTERVAL = 15  # seconds — keeps proxies and AI SSE clients alive
-_QUEUE_MAX = 1000          # bounded queue — prevents memory exhaustion on noisy containers
+_QUEUE_MAX = 1000  # bounded queue — prevents memory exhaustion on noisy containers
 
 
 @router.get("/{task_id}/stream")
@@ -44,10 +45,8 @@ async def stream_task_logs(task_id: str, request: Request):
                         queue.put_nowait(chunk)
                     except asyncio.QueueFull:
                         # Drop oldest item to make room — prefer liveness over completeness
-                        try:
+                        with contextlib.suppress(asyncio.QueueEmpty):
                             queue.get_nowait()
-                        except asyncio.QueueEmpty:
-                            pass
                         queue.put_nowait(chunk)
                 queue.put_nowait(b"__EOF__")
             except Exception as e:
@@ -56,17 +55,15 @@ async def stream_task_logs(task_id: str, request: Request):
         asyncio.create_task(asyncio.to_thread(docker_thread))
 
         buffer = b""
-        last_heartbeat = time.time()
 
         try:
             while not request.is_disconnected():
                 # Use a short get timeout so heartbeats fire even when the container is silent.
                 try:
                     chunk = await asyncio.wait_for(queue.get(), timeout=_HEARTBEAT_INTERVAL)
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     # No data within heartbeat window — send SSE comment to keep connection alive.
                     yield ": heartbeat\n\n"
-                    last_heartbeat = time.time()
                     continue
 
                 if chunk == b"__EOF__":
@@ -86,8 +83,8 @@ async def stream_task_logs(task_id: str, request: Request):
                     length = int.from_bytes(buffer[1:9], byteorder="big")
                     if len(buffer) < 9 + length:
                         break
-                    payload = buffer[9:9 + length].decode("utf-8", errors="replace").rstrip("\n")
-                    buffer = buffer[9 + length:]
+                    payload = buffer[9 : 9 + length].decode("utf-8", errors="replace").rstrip("\n")
+                    buffer = buffer[9 + length :]
                     if payload:
                         event_name = "stdout" if stream_type == 1 else "stderr"
                         yield f"event: {event_name}\ndata: {payload}\n\n"
@@ -97,10 +94,8 @@ async def stream_task_logs(task_id: str, request: Request):
         finally:
             stop_event.set()
             task["status"] = "completed"
-            try:
+            with contextlib.suppress(Exception):
                 container.remove(force=True)
-            except Exception:
-                pass
 
     return StreamingResponse(
         event_generator(),

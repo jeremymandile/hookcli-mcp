@@ -1,4 +1,5 @@
 import pytest
+
 from hookcli_mcp.core.validator import HookValidator
 
 
@@ -35,6 +36,7 @@ def test_validator_safe_command():
 async def test_validation_sandbox_no_network():
     """Sandbox must have no network egress."""
     from hookcli_mcp.sandbox.validate import run_validation_sandbox
+
     result = await run_validation_sandbox("curl -s --max-time 2 http://example.com || echo BLOCKED", timeout=10)
     # Either curl is missing or network is blocked; command should not succeed with real data
     assert result["network_allowed"] is False

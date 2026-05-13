@@ -1,29 +1,28 @@
-import hmac
 import hashlib
-import time
+import hmac
 import json
-from fastapi import APIRouter, Request, HTTPException
+import time
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
-from typing import Dict, Any
 
 router = APIRouter(prefix="/approvals", tags=["approvals"])
 
 SLACK_SIGNING_SECRET = "your-slack-signing-secret"
-pending_approvals: Dict[str, Any] = {}
+pending_approvals: dict[str, Any] = {}
 
 
 def verify_slack_signature(payload: str, timestamp: str, signature: str) -> bool:
     sig_basestring = f"v0:{timestamp}:{payload}"
-    my_sig = "v0=" + hmac.new(
-        SLACK_SIGNING_SECRET.encode(), sig_basestring.encode(), hashlib.sha256
-    ).hexdigest()
+    my_sig = "v0=" + hmac.new(SLACK_SIGNING_SECRET.encode(), sig_basestring.encode(), hashlib.sha256).hexdigest()
     return hmac.compare_digest(my_sig, signature)
 
 
 class ApprovalRequest(BaseModel):
     hook_id: str
     action_description: str
-    context: Dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
     timeout_sec: int = Field(default=300, ge=30, le=3600)
 
 

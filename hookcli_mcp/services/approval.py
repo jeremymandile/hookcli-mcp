@@ -1,7 +1,7 @@
-import asyncio
-import httpx
 import os
-from typing import Dict, Any
+from typing import Any
+
+import httpx
 
 SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 
@@ -9,14 +9,16 @@ SLACK_BOT_TOKEN = os.getenv("SLACK_BOT_TOKEN")
 async def request_approval(
     hook_id: str,
     event_id: str,
-    payload: Dict[str, Any],
+    payload: dict[str, Any],
     command: str,
     slack_channel: str = "#ops-alerts",
 ) -> bool:
     if not SLACK_BOT_TOKEN:
         return False
 
-    text = f"⚠️ *Approval required for hook execution*\nHook: `{hook_id}`\nEvent: `{event_id}`\nCommand: `{command[:200]}`"
+    text = (
+        f"⚠️ *Approval required for hook execution*\nHook: `{hook_id}`\nEvent: `{event_id}`\nCommand: `{command[:200]}`"
+    )
     blocks = [
         {"type": "section", "text": {"type": "mrkdwn", "text": text}},
         {

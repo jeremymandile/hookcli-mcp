@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Response
-from prometheus_client import REGISTRY, generate_latest, CONTENT_TYPE_LATEST
+from prometheus_client import CONTENT_TYPE_LATEST, REGISTRY, generate_latest
 
 router = APIRouter(tags=["observability"])
 

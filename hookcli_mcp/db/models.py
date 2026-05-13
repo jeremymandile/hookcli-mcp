@@ -1,5 +1,6 @@
-import aiosqlite
 from contextlib import asynccontextmanager
+
+import aiosqlite
 
 DB_PATH = "./hooks.db"
 

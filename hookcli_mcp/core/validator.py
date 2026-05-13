@@ -1,7 +1,7 @@
 import re
 import shlex
 from pathlib import Path
-from typing import Dict, Any, Optional, List
+from typing import Any
 
 import jinja2
 import jsonschema
@@ -10,9 +10,9 @@ from pydantic import BaseModel, Field
 
 class ValidationReport(BaseModel):
     valid: bool = True
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    rendered_command: Optional[str] = None
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+    rendered_command: str | None = None
     security_pass: bool = True
 
 
@@ -26,20 +26,39 @@ _DANGEROUS_RE = [
 
 # ── Policy: allow-listed binaries that may run inside the sandbox ──────────────
 # Extend this set as your hook library grows.
-ALLOWED_BINARIES: frozenset[str] = frozenset({
-    "sh", "bash", "echo", "printf", "cat", "grep", "sed", "awk",
-    "jq", "curl", "wget", "python3", "python", "node",
-    "sleep", "timeout", "date", "env", "true", "false",
-    "hookcli",  # the project's own CLI
-})
+ALLOWED_BINARIES: frozenset[str] = frozenset(
+    {
+        "sh",
+        "bash",
+        "echo",
+        "printf",
+        "cat",
+        "grep",
+        "sed",
+        "awk",
+        "jq",
+        "curl",
+        "wget",
+        "python3",
+        "python",
+        "node",
+        "sleep",
+        "timeout",
+        "date",
+        "env",
+        "true",
+        "false",
+        "hookcli",  # the project's own CLI
+    }
+)
 
 
 class HookValidator:
-    def __init__(self, schema: Optional[Dict[str, Any]] = None, secrets: Optional[Dict[str, str]] = None):
+    def __init__(self, schema: dict[str, Any] | None = None, secrets: dict[str, str] | None = None):
         self.schema = schema
         self.secrets = secrets or {}
 
-    def validate(self, command: str, payload: Dict[str, Any]) -> ValidationReport:
+    def validate(self, command: str, payload: dict[str, Any]) -> ValidationReport:
         report = ValidationReport()
 
         # ── Step 1: Template rendering ─────────────────────────────────────────
@@ -87,8 +106,7 @@ class HookValidator:
                 report.valid = False
                 report.security_pass = False
                 report.errors.append(
-                    f"Binary '{binary}' is not in the allow-list. "
-                    f"Permitted: {', '.join(sorted(ALLOWED_BINARIES))}"
+                    f"Binary '{binary}' is not in the allow-list. Permitted: {', '.join(sorted(ALLOWED_BINARIES))}"
                 )
                 return report
         except ValueError as e:
@@ -111,7 +129,9 @@ class HookValidator:
         # ── Step 5: Soft warnings ──────────────────────────────────────────────
         if "<UNRESOLVED:" in rendered:
             keys = re.findall(r"<UNRESOLVED:([^>]+)>", rendered)
-            report.warnings.append(f"Unresolved secret(s): {', '.join(keys)}")
+            # Include the full placeholder so callers can grep for "UNRESOLVED"
+            placeholders = ", ".join(f"<UNRESOLVED:{k}>" for k in keys)
+            report.warnings.append(f"Unresolved secret(s): {placeholders}")
         if re.search(r"(password|token|key)\s*=\s*[\"'][^\"']{4,}[\"']", rendered, re.IGNORECASE):
             report.warnings.append("Potential hardcoded credential in rendered command")
 

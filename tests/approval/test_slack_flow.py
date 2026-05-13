@@ -1,5 +1,7 @@
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
+
 from hookcli_mcp.services.approval import request_approval
 
 
@@ -17,10 +19,11 @@ class TestApprovalFlow:
 
     async def test_approval_returns_false_without_token(self):
         import os
+
         original = os.environ.pop("SLACK_BOT_TOKEN", None)
         try:
-            import importlib
             import hookcli_mcp.services.approval as svc
+
             svc.SLACK_BOT_TOKEN = None
             result = await request_approval("h-1", "e-1", {}, "echo test")
             assert result is False

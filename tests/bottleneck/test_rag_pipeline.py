@@ -1,5 +1,6 @@
 import pytest
-from hookcli_mcp.tools.bottleneck_analyze import bottleneck_analyze, BottleneckRequest
+
+from hookcli_mcp.tools.bottleneck_analyze import BottleneckRequest, bottleneck_analyze
 
 
 @pytest.mark.asyncio

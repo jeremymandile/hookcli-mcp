@@ -1,6 +1,7 @@
+from typing import Any
+
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
-from typing import Optional, Dict, Any, List
 
 from hookcli_mcp.core.validator import HookValidator
 from hookcli_mcp.sandbox.validate import run_validation_sandbox
@@ -10,19 +11,19 @@ router = APIRouter(tags=["validate"])
 
 class ValidateRequest(BaseModel):
     command: str
-    payload: Dict[str, Any] = Field(default_factory=dict)
-    schema: Optional[Dict[str, Any]] = None
-    secrets: Dict[str, str] = Field(default_factory=dict)
+    payload: dict[str, Any] = Field(default_factory=dict)
+    schema: dict[str, Any] | None = None
+    secrets: dict[str, str] = Field(default_factory=dict)
     allow_network: bool = False
     timeout_sec: int = Field(default=30, ge=1, le=120)
 
 
 class ValidateResponse(BaseModel):
     valid: bool
-    errors: List[str]
-    warnings: List[str]
-    rendered_command: Optional[str]
-    execution: Optional[Dict[str, Any]] = None
+    errors: list[str]
+    warnings: list[str]
+    rendered_command: str | None
+    execution: dict[str, Any] | None = None
     security_pass: bool = True
 
 

@@ -1,13 +1,15 @@
 import asyncio
-import docker
+import contextlib
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
+import docker
 
 SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
 MAX_OUTPUT_BYTES = 10_240  # 10 KB — prevent memory exhaustion from verbose commands
 
 
-async def run_in_sandbox(command: str, env: Dict[str, str], hook_id: str, timeout: int = 120) -> Dict[str, Any]:
+async def run_in_sandbox(command: str, env: dict[str, str], hook_id: str, timeout: int = 120) -> dict[str, Any]:
     client = docker.from_env()
     container = None
 
@@ -16,15 +18,15 @@ async def run_in_sandbox(command: str, env: Dict[str, str], hook_id: str, timeou
             "alpine:3.19",
             command=["sh", "-c", command],
             environment={**env, "DRY_RUN": "false"},
-            network_disabled=True,          # zero egress — no outbound calls
+            network_disabled=True,  # zero egress — no outbound calls
             read_only=True,
             tmpfs={"/tmp": "rw,noexec,nosuid,size=32m"},
             security_opt=["no-new-privileges:true", f"seccomp={SECCOMP_PATH}"],
             cap_drop=["ALL"],
             cap_add=["CHOWN", "SETUID", "SETGID"],
             mem_limit="256m",
-            nano_cpus=500_000_000,          # 0.5 vCPU
-            pids_limit=64,                  # fork-bomb prevention
+            nano_cpus=500_000_000,  # 0.5 vCPU
+            pids_limit=64,  # fork-bomb prevention
             detach=True,
             labels={"hookcli.hook_id": hook_id},
         )
@@ -52,7 +54,5 @@ async def run_in_sandbox(command: str, env: Dict[str, str], hook_id: str, timeou
         return {"exit_code": -1, "stdout": "", "stderr": str(e), "success": False, "truncated": False}
     finally:
         if container:
-            try:
+            with contextlib.suppress(Exception):
                 container.remove(force=True)
-            except Exception:
-                pass

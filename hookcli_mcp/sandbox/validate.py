@@ -1,13 +1,15 @@
 import asyncio
-import docker
+import contextlib
 from pathlib import Path
-from typing import Dict, Any
+from typing import Any
+
+import docker
 
 SECCOMP_PATH = Path(__file__).parent.parent.parent / "config" / "seccomp.json"
 MAX_OUTPUT_BYTES = 10_240  # 10 KB
 
 
-async def run_validation_sandbox(command: str, timeout: int = 30) -> Dict[str, Any]:
+async def run_validation_sandbox(command: str, timeout: int = 30) -> dict[str, Any]:
     """Run a command in a locked-down sandbox with zero network egress.
 
     Used by hook_validate dry-runs. Stricter limits than the production executor:
@@ -18,7 +20,7 @@ async def run_validation_sandbox(command: str, timeout: int = 30) -> Dict[str, A
     """
     client = docker.from_env()
     container = None
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "exit_code": -1,
         "stdout": "",
         "stderr": "",
@@ -60,9 +62,7 @@ async def run_validation_sandbox(command: str, timeout: int = 30) -> Dict[str, A
         result["stderr"] = str(e)
     finally:
         if container:
-            try:
+            with contextlib.suppress(Exception):
                 container.remove(force=True)
-            except Exception:
-                pass
 
     return result
