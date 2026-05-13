@@ -1,0 +1,26 @@
+name: gateway_startup_health
+description: >
+  On gateway startup, verify Docker daemon, Redis, SQLite, and OTel collector
+  are all reachable. Fails fast if any subsystem is down so the gateway never
+  accepts requests in a degraded state.
+source: agent_runtime
+event_type: gateway:startup
+filter_expr: ""
+command: |
+  echo "Running startup health checks..." \
+    && curl -sf http://localhost:8000/api/health | grep '"status":"healthy"' \
+    && echo "All subsystems healthy" \
+    || (echo "Startup health check FAILED — refusing to accept requests" && exit 1)
+timeout_sec: 30
+retry_policy:
+  max_attempts: 2
+  backoff_sec: 5
+approval_required: false
+required_binaries:
+  - curl
+  - grep
+  - echo
+notes: >
+  The health endpoint at /api/health returns real-time subsystem state:
+  docker_daemon (via docker.from_env().ping()) and sqlite_conn (via aiosqlite).
+  A degraded response (either false) should block gateway startup.

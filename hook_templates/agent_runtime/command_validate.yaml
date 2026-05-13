@@ -1,0 +1,29 @@
+name: agent_command_validate
+description: >
+  Every command the agent issues is validated through the same hook_validate
+  pipeline used for business hooks — allow-list check, regex security guard,
+  and optional dry-run sandbox. Rejects commands that violate policy before
+  they reach the execution layer.
+source: agent_runtime
+event_type: command:new
+filter_expr: ""
+command: |
+  echo "Validating command: {{ event.command }}" \
+    && hookcli hook_validate \
+       --command "{{ event.command }}" \
+       --workspace "{{ event.workspace_id }}" \
+    && if [ $? -ne 0 ]; then
+         echo "Command rejected by security policy"
+         exit 1
+       fi
+timeout_sec: 15
+retry_policy:
+  max_attempts: 0
+approval_required: false
+required_binaries:
+  - hookcli
+  - echo
+notes: >
+  This hook mirrors the hook_validate MCP tool at the agent command level.
+  It applies the same ALLOWED_BINARIES policy and regex guards, so the
+  security model is consistent across both layers.

@@ -1,0 +1,25 @@
+name: session_compact_summary
+description: >
+  Before the agent's context window compacts, extract a structured summary
+  and write it to external memory. Prevents context loss across long sessions
+  by persisting the session state to SQLite before the compaction window closes.
+source: agent_runtime
+event_type: session:compact:before
+filter_expr: ""
+command: |
+  echo "Compacting session {{ event.session_id }}: {{ event.message_count }} messages" \
+    && hookcli db insert \
+       --table session_summaries \
+       --data "{\"session_id\": \"{{ event.session_id }}\", \"summary\": \"{{ event.summary }}\", \"message_count\": {{ event.message_count }}, \"compact_at\": \"{{ event.timestamp }}\"}"
+timeout_sec: 10
+retry_policy:
+  max_attempts: 1
+  backoff_sec: 2
+approval_required: false
+required_binaries:
+  - hookcli
+  - echo
+notes: >
+  Pair with a session:compact:after hook to verify summary integrity.
+  The session_summaries table is automatically created by init_db().
+  Query summaries with: SELECT * FROM session_summaries ORDER BY compact_at DESC.

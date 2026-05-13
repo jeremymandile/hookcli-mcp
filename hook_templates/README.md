@@ -6,10 +6,27 @@ loaded via `hookcli hook create --from-template <file>`.
 
 ## Available Templates
 
+### Business Event Hooks
+
 | Template | Trigger | Binaries | Use Case |
 |----------|---------|----------|----------|
 | `stripe_payment_recovery.yaml` | `payment_intent.payment_failed` | `stripe`, `curl` | Card errors trigger recovery portal |
 | `github_build_retry.yaml` | `workflow_run.failed` | `gh`, `curl` | Failed builds retry; second failure creates Jira bug |
+
+### Agent Runtime Hooks (v1.2.0)
+
+These templates govern the **AI's own lifecycle** — startup, command execution, and session
+compaction. They sit one layer above the business hooks and apply the same security model to
+the agent runtime itself.
+
+| Template | Trigger | Action |
+|----------|---------|--------|
+| `agent_runtime/command_validate.yaml` | `command:new` | Run through `hook_validate` allow-list + sandbox before execution |
+| `agent_runtime/session_compact_summary.yaml` | `session:compact:before` | Persist structured summary before context loss |
+| `agent_runtime/gateway_startup_health.yaml` | `gateway:startup` | Fail-fast subsystem health check; refuse degraded startup |
+
+See [`agent_runtime/README.md`](agent_runtime/README.md) for the full event taxonomy
+and the composed architecture (runtime hooks + business hooks = full trust boundary).
 
 ## Usage
 
