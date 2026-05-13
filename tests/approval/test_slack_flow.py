@@ -7,6 +7,7 @@ from hookcli_mcp.services.approval import request_approval
 
 @pytest.mark.asyncio
 class TestApprovalFlow:
+    @patch("hookcli_mcp.services.approval.SLACK_BOT_TOKEN", "xoxb-fake-token")
     @patch("hookcli_mcp.services.approval.httpx.AsyncClient")
     async def test_approval_posts_to_slack(self, mock_client):
         mock_post = AsyncMock()

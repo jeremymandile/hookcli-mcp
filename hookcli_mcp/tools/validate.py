@@ -12,7 +12,7 @@ router = APIRouter(tags=["validate"])
 class ValidateRequest(BaseModel):
     command: str
     payload: dict[str, Any] = Field(default_factory=dict)
-    schema: dict[str, Any] | None = None
+    payload_schema: dict[str, Any] | None = None
     secrets: dict[str, str] = Field(default_factory=dict)
     allow_network: bool = False
     timeout_sec: int = Field(default=30, ge=1, le=120)
@@ -29,7 +29,7 @@ class ValidateResponse(BaseModel):
 
 @router.post("", response_model=ValidateResponse)
 async def hook_validate(req: ValidateRequest) -> ValidateResponse:
-    validator = HookValidator(schema=req.schema, secrets=req.secrets)
+    validator = HookValidator(schema=req.payload_schema, secrets=req.secrets)
     report = validator.validate(req.command, req.payload)
 
     errors = report.errors.copy()
