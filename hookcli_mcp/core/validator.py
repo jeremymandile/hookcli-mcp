@@ -49,6 +49,14 @@ ALLOWED_BINARIES: frozenset[str] = frozenset(
         "true",
         "false",
         "hookcli",  # the project's own CLI
+        # ── v1.1.0: Production integration binaries ──────────────
+        "stripe",    # payment recovery, fraud detection
+        "gh",        # CI/CD remediation, onboarding, offboarding
+        "aws",       # cloud scaling, DNS failover, compliance
+        "jira",      # ticket creation, support triage
+        "gcloud",    # multi-cloud cost, GCP operations
+        "kubectl",   # container orchestration
+        "psql",      # database backup, inventory queries
     }
 )
 

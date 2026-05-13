@@ -1,0 +1,37 @@
+name: github_build_retry
+description: >
+  Auto-retry a failed CI build once. If it fails again, create a Jira bug
+  with context and assign it to the last committer. Posts to #eng-ci on Slack.
+source: webhook
+event_type: workflow_run.failed
+filter_expr: |
+  .action == "completed"
+  and .workflow_run.conclusion == "failure"
+  and (.workflow_run.head_branch == "main" or .workflow_run.head_branch == "develop")
+command: |
+  gh run rerun {{ event.workflow_run.id }} \
+     --repo {{ event.repository.full_name }} \
+     --failed \
+  || (
+    COMMITTER=$(gh api repos/{{ event.repository.full_name }}/commits/{{ event.workflow_run.head_sha }} \
+      --jq '.author.login') \
+    && curl -s -X POST https://slack.com/api/chat.postMessage \
+       -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+       -H "Content-Type: application/json" \
+       -d "{\"channel\": \"#eng-ci\", \"text\": \"Build {{ event.workflow_run.name }} failed after auto-retry. Assign: @$COMMITTER — {{ event.workflow_run.html_url }}\"}"
+  )
+timeout_sec: 60
+retry_policy:
+  max_attempts: 1
+  backoff_sec: 0
+approval_required: false
+required_binaries:
+  - gh
+  - curl
+required_secrets:
+  - SLACK_BOT_TOKEN
+  - GITHUB_TOKEN
+validate_first: true
+notes: >
+  Register the webhook in GitHub repo Settings → Webhooks. Select the
+  'workflow_run' event. Set GITHUB_TOKEN with repo + workflow scope.

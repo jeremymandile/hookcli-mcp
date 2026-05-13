@@ -1,0 +1,32 @@
+name: stripe_payment_recovery
+description: >
+  When a payment fails due to a card error, alert the billing team and send the
+  customer a Stripe Customer Portal link to update their payment method.
+source: webhook
+event_type: payment_intent.payment_failed
+filter_expr: |
+  .type == "payment_intent.payment_failed"
+  and .data.object.last_payment_error.type == "card_error"
+command: |
+  echo "Payment failed: {{ event.data.object.id }}" \
+    && curl -s -X POST https://slack.com/api/chat.postMessage \
+       -H "Authorization: Bearer {{ secret('SLACK_BOT_TOKEN') }}" \
+       -H "Content-Type: application/json" \
+       -d "{\"channel\": \"#billing-alerts\", \"text\": \"Payment failed: {{ event.data.object.id }} — {{ event.data.object.last_payment_error.message }}\"}" \
+    && stripe billing_portal_configuration create \
+       --customer {{ event.data.object.customer }}
+timeout_sec: 30
+retry_policy:
+  max_attempts: 3
+  backoff_sec: 5
+approval_required: false
+required_binaries:
+  - stripe
+  - curl
+required_secrets:
+  - SLACK_BOT_TOKEN
+  - STRIPE_API_KEY
+validate_first: true
+notes: >
+  Register the webhook endpoint in the Stripe dashboard pointing to
+  POST /api/webhooks/stripe. Set STRIPE_WEBHOOK_SECRET in .env.
